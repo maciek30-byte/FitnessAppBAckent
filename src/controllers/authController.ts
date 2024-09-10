@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
-
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import User from '../models/User';
 
 export const registerUser = async (req: Request, res: Response) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, age, gender } = req.body;
 
   try {
     let user = await User.findOne({ email });
@@ -13,11 +13,15 @@ export const registerUser = async (req: Request, res: Response) => {
       return res.status(400).json({ msg: 'User already exists' });
     }
 
-    // Tworzenie nowego użytkownika bez haszowania hasła
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
     user = new User({
       name,
       email,
-      password, // Hasło zapisywane jako zwykły tekst
+      password: hashedPassword,
+      age,
+      gender,
     });
 
     await user.save();
@@ -29,13 +33,13 @@ export const registerUser = async (req: Request, res: Response) => {
     };
 
     jwt.sign(
-      payload,
-      'your_jwt_secret', // Zamień to na bardziej bezpieczny klucz w rzeczywistej aplikacji
-      { expiresIn: 360000 },
-      (err, token) => {
-        if (err) throw err;
-        res.json({ token });
-      }
+        payload,
+        process.env.JWT_SECRET || 'your_jwt_secret',
+        { expiresIn: 360000 },
+        (err, token) => {
+          if (err) throw err;
+          res.json({ token });
+        }
     );
   } catch (err) {
     console.error(err.message);
@@ -53,12 +57,12 @@ export const loginUser = async (req: Request, res: Response) => {
       return res.status(400).json({ msg: 'Invalid credentials' });
     }
 
-    // Sprawdzenie, czy hasło pasuje (bez haszowania)
-    if (password !== user.password) {
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
       return res.status(400).json({ msg: 'Invalid credentials' });
     }
 
-    // Generowanie tokena JWT
     const payload = {
       user: {
         id: user.id,
@@ -66,13 +70,13 @@ export const loginUser = async (req: Request, res: Response) => {
     };
 
     jwt.sign(
-      payload,
-      'your_jwt_secret', // Zamień to na bardziej bezpieczny klucz w rzeczywistej aplikacji
-      { expiresIn: 360000 },
-      (err, token) => {
-        if (err) throw err;
-        res.json({ token });
-      }
+        payload,
+        process.env.JWT_SECRET || 'your_jwt_secret',
+        { expiresIn: 360000 },
+        (err, token) => {
+          if (err) throw err;
+          res.json({ token });
+        }
     );
   } catch (err) {
     console.error(err.message);
